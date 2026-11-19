@@ -8,3 +8,27 @@ name = "ripper"
 path = "src/main.rs"
 
 [dependencies]
+
+# UI
+clap = "4.6"
+inquire = "0.9"
+opener = "0.9"
+
+slug = "0.1"
+
+# Filesystem
+directories = "6.0"
+tempfile = "3.27"
+steamlocate = "2.1"
+
+keyring = "4.2"
+
+petgraph = "0.8"
+
+# Archive
+sevenz-rust2 = "0.25"
+unrar = "0.5"
+zip = "9.7"
+
+
+# add cynic and uuid
