@@ -9,6 +9,10 @@ There are some concepts referred to by Nexus that `ripperdoc` refers to by anoth
 
 ## Intended Usage
 
+This tool is not intended to be a one-stop shop for Cyberpunk mod management. Mod management with `ripperdoc` is still largely manual; users have to download the packages themselves, add compatibility information themselves, test their mods themselves. `ripperdoc` aims to automate the tedious and fragile parts of mod management that are easy to get wrong, so users can focus on actually modding.
+
+### Usage Modes
+
 `ripperdoc` is intended for use primarily in an interactive shell session. Installing a mod usually requires more information than is usually provided at first invocation, so that information has to be supplied by prompting the user for it; thus, an interactive shell session is necessary. An interactive shell session also allows the tool to give feedback directly to the user (e.g. informing of automatic slug updates).
 
 Nevertheless, it is still possible to use `ripperdoc` in a scripting context, and the command-line arguments needed to supply all required information at invocation do exist. However, `ripperdoc` will not be as flexible in that context, and a lot of conveniences will be lost.
@@ -82,9 +86,9 @@ Since main components generally do not own optional ones (at least I've never se
 
 ### Suppression
 
-Components of a mod can be suppressed. This is basically a mod-level disable, and suppressed components will not be enabled when their parent mod is enabled. As always, when suppressing a component, `ripperdoc` performs dependency resolution, and additionally suppresses any components depending on the component being suppressed.
+Components of a mod can be suppressed. This is basically a mod-level disable, and suppressed components will not be enabled when their parent mod is enabled. As always, when suppressing a component, `ripperdoc` performs dependency resolution, and additionally suppresses any components depending on the component being suppressed. The actual semantics of dependency relations and modelling are yet to be fully formalized, so this is just a handwavy definition for the time being.
 
-Enabled components cannot be suppressed, and `ripperdoc` will fail if suppression of an enabled component is attempted. This ensures that `enable` and `disable` are the final gatekeepers of consistency; suppression just builds on that.
+Enabled components cannot be suppressed, and `ripperdoc` will fail if suppression of an enabled component is attempted; the component must first be disabled. This ensures that `enable` and `disable` are the final gatekeepers of consistency; suppression just builds on that. This also ensures that dependencies of enabled mods cannot be suppressed at all, since they cannot be disabled individually in the first place.
 
 ### Component Handling
 
@@ -206,6 +210,8 @@ Deploy all targets in the staging pool (see Core Concepts for definition of "dep
 **Syntax:** `mod <SUBCOMMAND>`
 
 Performs operations on a target, e.g. updating compatibility info, opening the modpage, etc.
+
+*Implementation Note:* The install state **must** be validated during `mod edit`, before any changes are committed to the state, since it can affect the consistency of the install state (e.g. a disabled mod suddenly becomes a dependency for an enabled mod, two enabled mods suddenly become incompatible). If inconsistencies are found, the `doctor` subroutine must run: identify to the user the discovered inconsistencies and suggest fixes to apply, or discard the edit.
 
 **Options and Subcommands:**
 
@@ -401,7 +407,7 @@ Deploy is a staging pool operation. Conceptually, it merges all staged entities 
 
 While dependencies are pulled automatically from the Nexus API, the requirements section of a modpage is often abused by mod authors to advertise their other mods. This is often seen in Virtual Atelier modpages, where mod authors list their clothing mods whose items are sold by this atelier. Additionally, other dependencies are often optional. As such, when installing a mod, `ripperdoc` will have to ask the user for additional information on dependency optional-ness. To cut down on the number of questions, if a requirement is already installed and enabled, or is a known core mod, it is skipped and automatically marked as a dependency.
 
-Compatibility information is listed on the modpage, and is often human-readable and cannot be parsed by a program. As such, compatibility information will have to be entered manually by the user using the `mod` subcommand.
+Compatibility information is listed on the modpage, and is often human-readable and cannot be parsed by a program. As such, all compatibility information will have to be entered manually by the user using the `mod` subcommand. Support for automatically parsing and populating compatibility information will *not* be added. This tool cannot and will not serve as a substitute for due diligence in reading the mod page and bug reports, and ingame testing.
 
 ## Features
 
@@ -416,6 +422,7 @@ Compatibility information is listed on the modpage, and is often human-readable 
 - Game version awareness
   - Checks if the last update time of a mod was before the release date of the installed game version, and asks for user action
   - When updating a mod, if the last update time is after the release date of the installed game version, auto marks the mod as compatible
+  - This is not meant to be an authoritative mark of compatibility, users will still need to test the mod ingame and confirm that it is compatible; this feature is meant to alert users to a *potential* incompatibility, so they can make an informed decision. If a mod does turn out to be incompatible, then `mod edit -g` is right there.
 - Root directory awareness
   - Able to recognize if the root directory of a mod package is mergeable with the game install root
   - If not, able to handle some divergent cases
@@ -438,9 +445,17 @@ Entity can be implemented as an enum or a trait. (TBD)
 - Trait - each kind of entity gets its own enable and disable implementation, without a `match` expression.
 - Enum - the set of entities is closed (mod, main component, optional component), and components never own other components, so an enum fits. Enums also serialize directly with serde, and can be stored without boxing. Separate implementations are still possible: each variant wraps its own struct with its own `impl`, and the enum delegates to it (manually, or with the `enum_dispatch` crate).
 
+#### Entity State
+
+Components are the basic unit of management, and so they are the source of truth for all entity state. Mod state is built up as an aggregate of the state of its components (full semantics TBD, e.g. What does it mean for a mod to be enabled? Partially enabled?).
+
+#### Location of `enable()/disable()`
+
+In order to stay faithful to the abstract entity model, `enable()` and `disable()` will live on the entity object, rather than on the state. The state exposes entities as a borrowed view into the state (`struct EntityMut<'a>`), which exposes the enable and disable operations.
+
 ### DirTree
 
-DirTree is a hand-rolled data structure that represents a directory tree. It must work purely in memory (e.g. merge two DirTrees just to see the result), and it must also drive changes on disk.
+DirTree is a hand-rolled trie-based data structure that represents a directory tree. It transparently handles case normalization, so it can work with case-insensitive filesystems. It must work purely in memory (e.g. merge two DirTrees just to see the result), and it must also drive changes on disk.
 
 The main operation of a DirTree is to merge another DirTree. This is the fundamental operation for applying mod files to the game directory. Directories that exist in both trees are merged normally. Files that exist in both trees are a collision (see "File Ownership and Overwrites").
 
@@ -474,11 +489,8 @@ Invariant: only `FileOp::CreateDir` or `FileOp::RemoveDir` can target a director
 
 These came up in brainstorming, but are not decided yet.
 
-- Where enable and disable live - most enable and disable checks look at other entities (is the main component enabled, does anything depend on this). An `entity.enable()` method cannot see other entities unless it is given the whole state. An alternative is `state.enable(uuid)`, with each entity only supplying its own data.
-- Where enabled state is stored - storing an enabled flag on both a mod and its components lets them disagree. An alternative is to store the flag on components only, and derive the mod's state (enabled, disabled, or partial).
 - Freestanding and exclusive main as graph edges - a non-freestanding optional component could be modelled as a dependency on a main component. Exclusive main could be modelled as mutual incompatibility between main components. This would reuse dependency and incompatibility checks, bisect partitioning, and `--force`.
 - Bundled dependency check at merge time - the collision is visible during the merge, before the diff. A "dependency always wins" rule at merge time also works no matter which mod was enabled first. Consider only skipping silently when the file hashes match, and warning when they differ.
 - Enforcing the FileOp invariant with types - e.g. separate `DirOp` and `FileOp` enums, or separate `FilePath` and `DirPath` newtypes.
 - File leaf metadata - each file leaf could store its source path, its owning entity's UUID, and a content hash. The diff could then compare leaves without reading files from disk.
 - Crash recovery - in-memory rollback does not run if the process dies mid-apply. A journal written before the apply and removed after it would allow recovery on the next run.
-- Case normalization - Linux is case-sensitive, but mod packages are not consistent about case. Normalizing DirTree keys would make merge and diff handle this.
