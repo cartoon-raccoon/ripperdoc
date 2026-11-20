@@ -84,6 +84,8 @@ Since main components generally do not own optional ones (at least I've never se
 
 Components of a mod can be suppressed. This is basically a mod-level disable, and suppressed components will not be enabled when their parent mod is enabled. As always, when suppressing a component, `ripperdoc` performs dependency resolution, and additionally suppresses any components depending on the component being suppressed.
 
+Enabled components cannot be suppressed, and `ripperdoc` will fail if suppression of an enabled component is attempted. This ensures that `enable` and `disable` are the final gatekeepers of consistency; suppression just builds on that.
+
 ### Component Handling
 
 NexusMods distinguishes between main files (components), which contain the primary functionality of the mod, and optional files (components), which usually provide add-on functionality. Mod authors can also upload multiple different main components (e.g. to target different game versions), and multiple optional components. Furthermore, optional components can be freestanding (i.e. they can be enabled without enabling any main components). Therefore, `ripperdoc` must account for this. (details TBD)
@@ -216,10 +218,8 @@ Performs operations on a target, e.g. updating compatibility info, opening the m
   - `--category/-c [CATEGORY]` - Set the mod's category, unsets the category if no category is provided (`MOD` only)
   - `--tag/-t <TAG ...>` - Add one or more tags to the mod, tags prefixed with `del:` (e.g. `del:realistic`) will remove them (`MOD` only)
   - `--mark-core/-k` - Mark mod as (k)ore (`MOD` only)
-  - `--add-dep/-d <TARG ...>` - Add one or more dependencies. Usually used when adding a mod from GitHub, as Nexus mods' dependencies can be pulled from the API.
+  - `--dependency/-d <TARG ...>` - Add one or more dependencies. Prepend `TARG` with `del:` to remove it as a dependency instead.
   - `--optional/-o <DEP>` - Mark a dependency as optional - warns if specified dependency is a core mod
-  - `--suppress <COMPONENT>` - Suppress a component of the mod (`MOD` only, short form TBD)
-  - `--unsuppress <COMPONENT>` - Unsuppress a component of the mod (`MOD` only, short form TBD)
   - `--incompatible/-x <TARG ...>` - Mark mod as incompatible with one or more mods, prefix `TARG` with `del:` to unmark
   - `--incompatible-game/-g <VER>` - Mark mod as incompatible with a particular game version, prefix `VER` with `del:` to unmark
   - `--load-after/-a <TARG>` - Configure mod to load its archive files after `TARG`
@@ -227,6 +227,8 @@ Performs operations on a target, e.g. updating compatibility info, opening the m
   - `--load-first/-f` - Configure mod to load its archive files before any others
   - `--load-last/-l` - Configure mod to load its archive files after all others
   - `--remove-load-rule/-r [TARG]` - Remove the load constraint with `TARG`. If `TARG` is not specified, removes any absolute load rules (e.g. load first, load last).
+- `suppress <COMPONENT>` - suppresses the specified component.
+- `unsuppress <COMPONENT>` - unsuppresses the specified component.
 - `open <MOD> [OPTIONS]` - Open the mod's Nexus page or GitHub page (prioritizes Nexus, GitHub as fallback)
   - `--github/-g` - Open the mod's GitHub repo page, if any
 
@@ -270,6 +272,17 @@ Manages snapshots, exact details TBD.
 - `take` - Take a snapshot (Full syntax TBD)
 - `delete` - Delete a snapshot (Full syntax TBD)
 - `apply` - Applies a snapshot (Full syntax TBD)
+
+### `doctor`
+
+**Syntax:** `doctor [OPTIONS]`
+
+Validates the current mod state, prints any inconsistencies and errors found, and suggests fixes. In interactive mode, the user can select which fixes to apply. In scripting mode, it simply prints out the inconsistencies and errors, and exits.
+
+**Options and Subcommands:**
+
+- `--apply-all/-a` - automatically applies all suggested fixes. Useful for scripting mode.
+- TBD
 
 ### `load-order`
 
