@@ -80,6 +80,10 @@ These components will also have slugs generated for them from the name provided 
 
 Since main components generally do not own optional ones (at least I've never seen any), component identifiers cannot be stacked. For example, `live-a-little=game-2-5@timers-only` is not allowed, although this might change if I do find a case of this happening. However, optional components can be incompatible with certain main components (for example, if a mod has one main component for game v2.31 and another for game v2.5, and the optional component only supports game v2.5), so optional components will support incompatibility rules.
 
+### Suppression
+
+Components of a mod can be suppressed. This is basically a mod-level disable, and suppressed components will not be enabled when their parent mod is enabled. As always, when suppressing a component, `ripperdoc` performs dependency resolution, and additionally suppresses any components depending on the component being suppressed.
+
 ### Component Handling
 
 NexusMods distinguishes between main files (components), which contain the primary functionality of the mod, and optional files (components), which usually provide add-on functionality. Mod authors can also upload multiple different main components (e.g. to target different game versions), and multiple optional components. Furthermore, optional components can be freestanding (i.e. they can be enabled without enabling any main components). Therefore, `ripperdoc` must account for this. (details TBD)
@@ -205,7 +209,17 @@ Performs operations on a target, e.g. updating compatibility info, opening the m
 
 - `info <TARG>` - show target info
 - `edit <TARG> <OPTIONS ...>` - edit target info (validity of `TARG` depends on options specified)
+  - `--slug/-s <SLUG>` - Set the target's slug identifier
+  - `--nexus-id/-N <ID>` - Add a Nexus mod ID (`MOD` only)
+  - `--github-id/-G <REPO>` - Add a GitHub repo (`MOD` only)
+  - `--author/-A <NAME>` - Set the mod author name. Author name is usually inferred from GitHub repo name, or pulled from the Nexus API.
+  - `--category/-c [CATEGORY]` - Set the mod's category, unsets the category if no category is provided (`MOD` only)
+  - `--tag/-t <TAG ...>` - Add one or more tags to the mod, tags prefixed with `del:` (e.g. `del:realistic`) will remove them (`MOD` only)
   - `--mark-core/-k` - Mark mod as (k)ore (`MOD` only)
+  - `--add-dep/-d <TARG ...>` - Add one or more dependencies. Usually used when adding a mod from GitHub, as Nexus mods' dependencies can be pulled from the API.
+  - `--optional/-o <DEP>` - Mark a dependency as optional - warns if specified dependency is a core mod
+  - `--suppress <COMPONENT>` - Suppress a component of the mod (`MOD` only, short form TBD)
+  - `--unsuppress <COMPONENT>` - Unsuppress a component of the mod (`MOD` only, short form TBD)
   - `--incompatible/-x <TARG ...>` - Mark mod as incompatible with one or more mods, prefix `TARG` with `del:` to unmark
   - `--incompatible-game/-g <VER>` - Mark mod as incompatible with a particular game version, prefix `VER` with `del:` to unmark
   - `--load-after/-a <TARG>` - Configure mod to load its archive files after `TARG`
@@ -213,12 +227,6 @@ Performs operations on a target, e.g. updating compatibility info, opening the m
   - `--load-first/-f` - Configure mod to load its archive files before any others
   - `--load-last/-l` - Configure mod to load its archive files after all others
   - `--remove-load-rule/-r [TARG]` - Remove the load constraint with `TARG`. If `TARG` is not specified, removes any absolute load rules (e.g. load first, load last).
-  - `--optional/-o <DEP>` - Mark a dependency as optional - warns if specified dependency is a core mod
-  - `--nexus-id/-N <ID>` - Add a Nexus mod ID (`MOD` only)
-  - `--github-id/-G <REPO>` - Add a GitHub repo (`MOD` only)
-  - `--slug/-s <SLUG>` - Set the target's slug identifier
-  - `--category/-c [CATEGORY]` - Set the mod's category, unsets the category if no category is provided (`MOD` only)
-  - `--tag/-t` - Add one or more tags to the mod, tags prefixed with `del:` (e.g. `del:realistic`) will remove them (`MOD` only)
 - `open <MOD> [OPTIONS]` - Open the mod's Nexus page or GitHub page (prioritizes Nexus, GitHub as fallback)
   - `--github/-g` - Open the mod's GitHub repo page, if any
 
@@ -230,9 +238,16 @@ Lists installed mods.
 
 **Options and Subcommands:**
 
-- `--category/-c CATEGORY` - only lists mods of the given category
-- `--tags/-t TAGS ...` - only lists mods with the given tags
-- `--sort/-s` - sort the list order by a given predicate (TBD)
+- `--category/-c <CATEGORY>` - only lists mods of the given category
+- `--enabled/-e` - only list enabled mods.
+- `--disabled/-d` - only list disabled mods.
+- `--tags/-t <TAGS> ...` - only lists mods with the given tags
+- `--sort/-s <PRED>` - sort the list order by a given predicate. Prepend `rev:` to the predicate (e.g. `rev:name`) to reverse the order. Valid predicates are:
+  - `name` - sort by slugs' alphabetical order.
+  - `author` - sort by mod author name in alphabetical order, slug alphabetical order within author clusters.
+  - `category` - sort by category alphabetical order, slug alphabetical order within categories, uncategorized mods last.
+  - `last-updated` - sort by date of last update.
+  - `install-date` - sort by date of install.
 
 ### `bisect`
 
@@ -244,15 +259,17 @@ Controls the bisection process.
 
 TBD
 
-### `rollback`
+### `snapshot`
 
-**Syntax:** TBD
+**Syntax:** `snapshot <SUBCOMMANMD>`
 
-Rolls back to a previous mod state.
+Manages snapshots, exact details TBD.
 
 **Options and Subcommands:**
 
-TBD
+- `take` - Take a snapshot (Full syntax TBD)
+- `delete` - Delete a snapshot (Full syntax TBD)
+- `apply` - Applies a snapshot (Full syntax TBD)
 
 ### `load-order`
 
@@ -324,7 +341,7 @@ Every entity has three attributes:
 - A slug - the user-facing identifier (see "Identifying a Mod").
 - A DirTree - the files contained within that entity (see "Architecture").
 
-Every entity supports two core operations: enable and disable. What these do depends on the kind of entity. A mod owns components (entities owned by another entity), so enabling a mod enables all of its owned components. Components to be ignored can be specified.
+Every entity supports two core operations: enable and disable. What these do depends on the kind of entity. A mod owns components (entities owned by another entity), so enabling a mod enables all of its owned, unsuppressed components.
 
 Ownership (at the entity level) is only one level deep: mods own components, and components never own other components (but do own files - see below). No new kinds of entity are expected beyond mods, main components, and optional components.
 
