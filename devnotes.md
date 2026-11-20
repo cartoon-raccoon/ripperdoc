@@ -1,5 +1,18 @@
 # Development Notes
 
+## Intended Usage
+
+`ripperdoc` is intended for use primarily in an interactive shell session. Installing a mod usually requires more information than is usually provided at first invocation, so that information has to be supplied by prompting the user for it; thus, an interactive shell session is necessary. An interactive shell session also allows the tool to give feedback directly to the user (e.g. informing of automatic slug updates).
+
+Nevertheless, it is still possible to use `ripperdoc` in a scripting context, and the command-line arguments needed to supply all required information at invocation do exist. However, `ripperdoc` will not be as flexible in that context, and a lot of conveniences will be lost.
+
+### Modes
+
+`ripperdoc` can operate in two modes:
+
+- Interactive mode. This is the interactive shell session, where the tool can ask the user questions and get an immediate answer.
+- Scripting mode. This is used when `ripperdoc` detects that stdout/stderr is not a TTY. In this mode, if required information is missing, the tool will fail with a "missing information" error.
+
 ## Identifying a Mod
 
 A mod can be identified by a slug (i.e. a short generated name), its NexusMods ID, or a GitHub repository (`user/repo`).
@@ -62,48 +75,52 @@ When installing a file and the mod is already installed, `ripperdoc` will ask th
 
 ## Subcommands
 
+Where `TARG` is used, it means the command can target any entity (see "Entities" below). Where `MOD` is used, mods are the only valid target entity.
+
+- `config <options>` - edit `ripperdoc`'s configuration
+  - Options and subcommands TBD (one option for each config key)
 - `install <FILE>` - unpacks a mod archive, pulls its information from the Nexus API, performs dependency resolution, adds the mod files to managed state; if mod is already installed, performs an update instead
   - `--enable/-e` - enables the mod after installing, ignored if updating
   - `--use-nexus-tags/-T` - use the tags specified by Nexus (also a config key `use-nexus-tags`), ignored if updating
   - `--use-nexus-category/-C` - use the category specified by Nexus (also a config key `use-nexus-category`), ignored if updating
   - all options from `mod edit` can also be used here, and can be used while updating.
-- `uninstall <MOD ...>` - disables the mod if enabled, then deletes from managed state, optionally recursing to its dependencies
+- `uninstall <TARG ...>` - disables the target if enabled, then deletes from managed state, optionally recursing to its dependencies
   - `--recursive/-r` - also uninstalls the mod's dependencies that no other mods depend on
   - `--preserve-archive/-a [PATH]` - places the archive file at `PATH`, current directory if unspecified
-- `enable <MODS ...>` - checks for incompatibilities and conflicts, then enables it (see section below for what "enable" entails)
-  - `--staging-pool/-s` - target the staging pool; if provided, then `MODS` must not be present, required otherwise
+- `enable <TARG ...>` - checks for incompatibilities and conflicts, then enables the target (see section below for what "enable" entails)
+  - `--staging-pool/-s` - target the staging pool; if provided, then `TARG` must not be present, required otherwise
   - `--force/-f` - skip dependency and incompatibility checks
-- `disable <MODS ...>` - checks for dependencies, then disables the mod (see section below for what "disable" entails)
-  - `--staging-pool/s` - target the staging pool; if provided, then `MODS` must not be present, required otherwise
-  - `--recursive/r` - also disables the mod's dependencies that no other mods depend on
+- `disable <TARG ...>` - checks for dependencies, then disables the target (see section below for what "disable" entails)
+  - `--staging-pool/-s` - target the staging pool; if provided, then `TARG` must not be present, required otherwise
+  - `--recursive/-r` - also disables the target's dependencies that no other mods depend on
   - `--force/-f` - skip dependency checks
-- `outdated` - pulls updated mod info from the Nexus API, displays mods that need updating
-  - Options and subcommands TBD
-- `stage <MODS ...>` - add a mod and any disabled dependencies to the staging pool
-  - `--no-enable/-x` - do not also enable the mod
+- `outdated` - pulls latest mod info from the Nexus API, displays mods that need updating
+  - `--since/-d <DATE>` - instead show mods that were updated after the (d)ate `DATE` (date format TBD).
+- `stage <TARG ...>` - enable the target, and add it and any disabled dependencies to the staging pool
+  - `--no-enable/-x` - do not also enable the target
   - `--nonrecursive/-n` - do not stage dependencies; if present, implies `-x`
-- `unstage [MODS ...]` - remove mods from the staging pool
-  - `--all/-a` - unstage all mods and clear the staging pool; if provided, then `MODS` must not be present, required otherwise
-- `deploy` - deploy all mods in the staging pool
-  - `--unstage-disabled/-d` - unstages all disabled mods in the staging pool before deploying
-- `mod <SUBCOMMAND>` - operations on a mod, e.g. updating compatibility info, opening the modpage, etc.
-  - `info <MOD>` - show mod info
-  - `edit <MOD> <OPTIONS ...>` - edit mod info
-    - `--mark-core/-k` - Mark mod as (k)ore
-    - `--incompatible-mod/-m <MOD ...>` - Mark mod as incompatible with one or more mods, inverse `--compatible-mod`
-    - `--incompatible-game/-g <VER>` - Mark mod as incompatible with a particular game version, inverse `--compatible-game`
-    - `--load-after/-a <MOD>` - Configure mod to load its archive files after `MOD`
-    - `--load-before/-b <MOD>` - Configure mod to load its archive files before `MOD`
+- `unstage [TARG ...]` - remove targets from the staging pool
+  - `--all/-a` - unstage all targets and clear the staging pool; if provided, then `TARG` must not be present, required otherwise
+- `deploy` - deploy all targets in the staging pool
+  - `--unstage-disabled/-d` - unstages all (d)isabled targets in the staging pool before deploying
+- `mod <SUBCOMMAND>` - operations on a target, e.g. updating compatibility info, opening the modpage, etc.
+  - `info <TARG>` - show target info
+  - `edit <TARG> <OPTIONS ...>` - edit target info (validity of `TARG` depends on options specified)
+    - `--mark-core/-k` - Mark mod as (k)ore (`MOD` only)
+    - `--incompatible/-x <TARG ...>` - Mark mod as incompatible with one or more mods, prefix `TARG` with `del:` to unmark
+    - `--incompatible-game/-g <VER>` - Mark mod as incompatible with a particular game version, prefix `VER` with `del:` to unmark
+    - `--load-after/-a <TARG>` - Configure mod to load its archive files after `TARG`
+    - `--load-before/-b <TARG>` - Configure mod to load its archive files before `TARG`
     - `--load-first/-f` - Configure mod to load its archive files before any others
     - `--load-last/-l` - Configure mod to load its archive files after all others
-    - `--remove-load-rule/-r [MOD]` - Remove the load constraint with `MOD`. If `MOD` is not specified, removes any absolute load rules (e.g. load first, load last).
+    - `--remove-load-rule/-r [TARG]` - Remove the load constraint with `TARG`. If `TARG` is not specified, removes any absolute load rules (e.g. load first, load last).
     - `--optional <DEP>` - Mark a dependency as optional - warns if specified dependency is a core mod
-    - `--nexus-id/-N <ID>` - Add a Nexus mod ID
-    - `--github-id/-G <REPO>` - Add a GitHub repo
-    - `--slug/-s <SLUG>` - Set the mod's slug identifier
-    - `--category/-c [CATEGORY]` - Set the mod's category, unsets the category if no category is provided
-    - `--tag/-t` - Add one or more tags to the mod, tags prefixed with `del:` (e.g. `del:realistic`) will remove them
-  - `open [OPTIONS]` - Open the mod's Nexus page or GitHub page (prioritizes Nexus, GitHub as fallback)
+    - `--nexus-id/-N <ID>` - Add a Nexus mod ID (`MOD` only)
+    - `--github-id/-G <REPO>` - Add a GitHub repo (`MOD` only)
+    - `--slug/-s <SLUG>` - Set the target's slug identifier
+    - `--category/-c [CATEGORY]` - Set the mod's category, unsets the category if no category is provided (`MOD` only)
+    - `--tag/-t` - Add one or more tags to the mod, tags prefixed with `del:` (e.g. `del:realistic`) will remove them (`MOD` only)
+  - `open <MOD> [OPTIONS]` - Open the mod's Nexus page or GitHub page (prioritizes Nexus, GitHub as fallback)
     - `--github/-g` - Open the mod's GitHub repo page, if any
 - `list [OPTIONS]` - lists installed mods
   - `--category/-c CATEGORY` - only lists mods of the given category
@@ -113,6 +130,8 @@ When installing a file and the mod is already installed, `ripperdoc` will ask th
   - Options and subcommands TBD
 - `rollback` - rolls back to a previous mod state
   - Options and subcommands TBD
+- `load-order` - list (and possibly edit, TBD) the load order of archive files and their corresponding mods
+  - Options and subcommands TBD
 - `method-scan` - Scans redscript and CET files for method wrappers and replacers
   - `--operation/-o OP` - show only method modifiers corresponding to `OP` (accepted values for `OP` are only `wrap` or `replace`)
   - `--target TARGET` - show only method modifiers which target `TARGET`
@@ -120,9 +139,17 @@ When installing a file and the mod is already installed, `ripperdoc` will ask th
 
 ## Load Order
 
-Load order is controlled by the `--load-*` flags on the `mod` subcommand. This uses `modlist.txt` (check the modding wiki for the correct name) in `archive/pc/mod` to apply the load order. Redscript and CET (afaik) don't provide a method to control their load order, so load order rules only apply to `.archive` files.
+Load order is controlled by the `--load-*` flags on the `mod` subcommand, which specifies load constraints on entities. This uses `modlist.txt` (check the modding wiki for the correct name) in `archive/pc/mod` to apply the load order. Redscript and CET (afaik) don't provide a method to control their load order, so load order rules only apply to `.archive` files.
 
-Load order is stored as a list of rules in the mod or file manifest. The final load order is determined using topological sort, and then modlist.txt is written to. Any cycles will cause an error, and the operation will fail.
+There are two kinds of load constraints: relative and absolute. Relative constraints specify an order relative to another target, and are specified using `--load-before` and `--load-after`. Absolute constraints specify an absolute load order (very first or very last), and are specified using `--load-first` and `--load-last`. Constraints can be removed using the `--remove-load-rule` option, which removes any relative load constraints to a specified target, or removes any absolute constraint if no target is specified.
+
+Load order is stored as a list of rules in the mod or file manifest. The final load order is determined using topological sort, and then modlist.txt is written to. Any cycles will cause an error, and the operation will fail. Additionally, any attempt to make a target load after its dependencies should also be rejected (first to load wins conflicts).
+
+One invariant that is naturally enforced by the disallowing of cycles is that only one absolute constraint can exist on a mod at any given time. We do not need to explicitly check for this, as cycle detection will catch it automatically, given the correct encoding. However, we can, as a convenience to the user, catch it in the specific case where the user is adding the opposite absolute constraint on a target that already has one (e.g. `mod edit some-mod --load-last` where `some-mod` already has load first), and offer to automatically delete the existing absolute constraint.
+
+### Mod Splitting
+
+Since modlist.txt handles load order at the individual archive file level, it is possible to split archive files from the same mod across a load order (e.g. load `modA-1.archive`, then `modB.archive`, then `modA-2.archive`). This is not currently supported, but will be added at some point.
 
 ### REDmod
 
@@ -157,6 +184,8 @@ Every entity has three attributes:
 Every entity supports two core operations: enable and disable. What these do depends on the kind of entity. A mod owns files (entities owned by another entity), so enabling a mod enables all of its owned files. Files to be ignored can be specified.
 
 Ownership is only one level deep: mods own files, and files never own other files. No new kinds of entity are expected beyond mods, main files, and optional files.
+
+TODO: Extend Entity to support individual files (rename File to Component) - useful for identifying file types and acting on them (e.g. disambiguate redscript from archive files), and archive-level load order
 
 #### Exclusive Main
 
